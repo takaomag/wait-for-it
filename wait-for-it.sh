@@ -33,7 +33,7 @@ wait_for()
     while :
     do
         # (echo > /dev/tcp/$HOST/$PORT) >/dev/null 2>&1
-	[[ ${REQUIRE_NULL} = '1' ]] && ${SCAN_CMD} >/dev/null 2>&1 || ${SCAN_CMD} </dev/null >/dev/null 2>&1
+	[[ ${REQUIRE_NULL} = '1' ]] && ${SCAN_CMD} </dev/null >/dev/null 2>&1 || ${SCAN_CMD} >/dev/null 2>&1
         result=$?
         if [[ $result -eq 0 ]]; then
             end_ts=$(date +%s)
@@ -138,7 +138,7 @@ CHILD=${CHILD:-0}
 QUIET=${QUIET:-0}
 REQUIRE_NULL=${REQUIRE_NULL:-0}
 
-if hash socast &>/dev/null;then
+if hash socat &>/dev/null;then
     SCAN_CMD="socat -t0.5 -T0.5 - TCP:${HOST}:${PORT},connect-timeout=0.5"
     REQUIRE_NULL=1
 elif hash netcat &>/dev/null;then
