@@ -33,7 +33,11 @@ wait_for()
     while :
     do
         # (echo > /dev/tcp/$HOST/$PORT) >/dev/null 2>&1
-	[[ ${REQUIRE_NULL} = '1' ]] && ${SCAN_CMD} </dev/null >/dev/null 2>&1 || ${SCAN_CMD} >/dev/null 2>&1
+        if [[ "${SCAN_CMD}" ]];then
+            [[ ${REQUIRE_NULL} = '1' ]] && ${SCAN_CMD} </dev/null >/dev/null 2>&1 || ${SCAN_CMD} >/dev/null 2>&1
+        else
+            (echo > /dev/tcp/$HOST/$PORT) >/dev/null 2>&1
+        fi
         result=$?
         if [[ $result -eq 0 ]]; then
             end_ts=$(date +%s)
@@ -148,8 +152,6 @@ elif hash nc &>/dev/null;then
 elif hash ncat &>/dev/null;then
     SCAN_CMD="ncat --send-only --wait 0.5 ${HOST} ${PORT}"
     REQUIRE_NULL=1
-else
-    SCAN_CMD="(echo > /dev/tcp/${HOST}/${PORT})"
 fi
 
 
