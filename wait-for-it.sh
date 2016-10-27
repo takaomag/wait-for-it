@@ -142,14 +142,14 @@ CHILD=${CHILD:-0}
 QUIET=${QUIET:-0}
 REQUIRE_NULL=${REQUIRE_NULL:-0}
 
-if hash socat &>/dev/null;then
+if hash socat >/dev/null;then
     SCAN_CMD="socat -t0.5 -T0.5 - TCP:${HOST}:${PORT},connect-timeout=0.5"
     REQUIRE_NULL=1
-elif hash netcat &>/dev/null;then
+elif hash netcat >/dev/null;then
     SCAN_CMD="netcat --tcp --wait=2 --zero ${HOST} ${PORT}"
-elif hash nc &>/dev/null;then
+elif hash nc >/dev/null;then
     SCAN_CMD="nc --tcp --wait=2 --zero ${HOST} ${PORT}"
-elif hash ncat &>/dev/null;then
+elif hash ncat >/dev/null;then
     SCAN_CMD="ncat --send-only --wait 0.5 ${HOST} ${PORT}"
     REQUIRE_NULL=1
 fi
