@@ -1,33 +1,34 @@
 #!/usr/bin/env bash
 #   Use this script to test if a given TCP host/port are available
 
-cmdname=$(basename $0)
+SCRIPT_NAME=$(basename ${0})
+SCRIPT_VERSION='1.0.0'
 
 echoerr() { if [[ $QUIET -ne 1 ]]; then echo "$@" 1>&2; fi }
 
-usage()
+show_usage()
 {
     cat << USAGE >&2
 Usage:
-    $cmdname host:port [-s] [-t timeout] [-- command args]
-    -h HOST | --host=HOST       Host or IP under test
-    -p PORT | --port=PORT       TCP port under test
-                                Alternatively, you specify the host and port as host:port
-    -s | --strict               Only execute subcommand if the test succeeds
-    -q | --quiet                Don't output any status messages
-    -t TIMEOUT | --timeout=TIMEOUT
-                                Timeout in seconds, zero for no timeout
-    -- COMMAND ARGS             Execute command with args after the test finishes
+    $SCRIPT_NAME host:port [-s] [-t timeout] [-- command args]
+    --help              show usage
+    --version           show version
+    --host HOST         Host or IP under test
+    --port PORT         TCP port under test
+    --timeout TIMEOUT   Timeout in seconds, zero for no timeout
+    --child             Fork
+    --strict            Only execute subcommand if the test succeeds
+    --quiet             Don't output any status messages
+    -- COMMAND ARGS     Execute command with args after the test finishes
 USAGE
-    exit 1
 }
 
 wait_for()
 {
     if [[ $TIMEOUT -gt 0 ]]; then
-        echoerr "$cmdname: waiting $TIMEOUT seconds for $HOST:$PORT"
+        echoerr "$SCRIPT_NAME: waiting $TIMEOUT seconds for $DISP_HOST:$PORT"
     else
-        echoerr "$cmdname: waiting for $HOST:$PORT without a timeout"
+        echoerr "$SCRIPT_NAME: waiting for $DISP_HOST:$PORT without a timeout"
     fi
     start_ts=$(date +%s)
     while :
@@ -41,7 +42,7 @@ wait_for()
         result=$?
         if [[ $result -eq 0 ]]; then
             end_ts=$(date +%s)
-            echoerr "$cmdname: $HOST:$PORT is available after $((end_ts - start_ts)) seconds"
+            echoerr "$SCRIPT_NAME: $DISP_HOST:$PORT is available after $((end_ts - start_ts)) seconds"
             break
         fi
         sleep 1
@@ -53,88 +54,105 @@ wait_for_wrapper()
 {
     # In order to support SIGINT during timeout: http://unix.stackexchange.com/a/57692
     if [[ $QUIET -eq 1 ]]; then
-        timeout $TIMEOUT $0 --quiet --child --host=$HOST --port=$PORT --timeout=$TIMEOUT &
+        timeout $TIMEOUT $0 --quiet --child --host $HOST --port $PORT --timeout $TIMEOUT &
     else
-        timeout $TIMEOUT $0 --child --host=$HOST --port=$PORT --timeout=$TIMEOUT &
+        timeout $TIMEOUT $0 --child --host $HOST --port $PORT --timeout $TIMEOUT &
     fi
     PID=$!
     trap "kill -INT -$PID" INT
     wait $PID
     RESULT=$?
     if [[ $RESULT -ne 0 ]]; then
-        echoerr "$cmdname: timeout occurred after waiting $TIMEOUT seconds for $HOST:$PORT"
+        echoerr "$SCRIPT_NAME: timeout occurred after waiting $TIMEOUT seconds for $DISP_HOST:$PORT"
     fi
     return $RESULT
 }
 
 # process arguments
-while [[ $# -gt 0 ]]
-do
-    case "$1" in
-        *:* )
-        hostport=(${1//:/ })
-        HOST=${hostport[0]}
-        PORT=${hostport[1]}
-        shift 1
+for OPT in "$@"; do
+    case "$OPT" in
+    '-h' | '--help' )
+        show_usage
+        exit 0
         ;;
-        --child)
+    '-v' | '--version' )
+        echo -e "${FONT_INFO}${SCRIPT_VERSION}${FONT_DEFAULT}"
+        exit 0
+        ;;
+    '--host' )
+        if [[ -z "$2" ]] || [[ "$2" =~ ^-+ ]]; then
+            echo -e "${FONT_ERROR}[ERROR] ${SCRIPT_NAME}: option requires an argument -- ${1}${FONT_DEFAULT}" 1>&2
+            echo
+            show_usage
+            exit 1
+        fi
+        HOST=$2
+        shift 2
+        ;;
+    '--port' )
+        if [[ -z "$2" ]] || [[ "$2" =~ ^-+ ]]; then
+            echo -e "${FONT_ERROR}[ERROR] ${SCRIPT_NAME}: option requires an argument -- ${1}${FONT_DEFAULT}" 1>&2
+            echo
+            show_usage
+            exit 1
+        fi
+        PORT=$2
+        shift 2
+        ;;
+    '--timeout' )
+        if [[ -z "$2" ]] || [[ "$2" =~ ^-+ ]]; then
+            echo -e "${FONT_ERROR}[ERROR] ${SCRIPT_NAME}: option requires an argument -- ${1}${FONT_DEFAULT}" 1>&2
+            echo
+            show_usage
+            exit 1
+        fi
+        TIMEOUT=$2
+        shift 2
+        ;;
+    '--child' )
         CHILD=1
-        shift 1
-        ;;
-        -q | --quiet)
-        QUIET=1
-        shift 1
-        ;;
-        -s | --strict)
-        STRICT=1
-        shift 1
-        ;;
-        -h)
-        HOST="$2"
-        if [[ $HOST == "" ]]; then break; fi
-        shift 2
-        ;;
-        --host=*)
-        HOST="${1#*=}"
-        shift 1
-        ;;
-        -p)
-        PORT="$2"
-        if [[ $PORT == "" ]]; then break; fi
-        shift 2
-        ;;
-        --port=*)
-        PORT="${1#*=}"
-        shift 1
-        ;;
-        -t)
-        TIMEOUT="$2"
-        if [[ $TIMEOUT == "" ]]; then break; fi
-        shift 2
-        ;;
-        --timeout=*)
-        TIMEOUT="${1#*=}"
-        shift 1
-        ;;
-        --)
         shift
+        ;;
+    '--strict' )
+        STRICT=1
+        shift
+        ;;
+    '--quiet' )
+        QUIET=1
+        shift
+        ;;
+    '--' )
         CLI="$@"
         break
         ;;
-        --help)
-        usage
+    -*)
+        echo -e "${FONT_ERROR}[ERROR] ${SCRIPT_NAME}: invalid option -- $(echo ${1} | sed 's/^-*//')'${FONT_DEFAULT}" 1>&2
+        echo
+        show_usage
+        exit 1
         ;;
-        *)
-        echoerr "Unknown argument: $1"
-        usage
-        ;;
-    esac
+    *)
+    if [[ ! -z "${1}" ]] && [[ ! "${1}" =~ ^-+ ]]; then
+        #param=( ${param[@]} "${1}" )
+        param+=( "${1}" )
+        shift
+    fi
+    ;;
+  esac
 done
 
 if [[ "$HOST" == "" || "$PORT" == "" ]]; then
     echoerr "Error: you need to provide a host and port to test."
-    usage
+    show_usage
+    exit 1
+elif grep -q ':' <<<${HOST};then
+    IS_IPV6=1
+    DISP_HOST="[${HOST}]"
+else
+    IS_IPV6=0
+    DISP_HOST="${HOST}"
 fi
+
 
 TIMEOUT=${TIMEOUT:-15}
 STRICT=${STRICT:-0}
@@ -142,18 +160,28 @@ CHILD=${CHILD:-0}
 QUIET=${QUIET:-0}
 REQUIRE_NULL=${REQUIRE_NULL:-0}
 
-if hash socat >/dev/null;then
-    SCAN_CMD="socat -t0.5 -T0.5 - TCP:${HOST}:${PORT},connect-timeout=0.5"
-    REQUIRE_NULL=1
-elif hash netcat >/dev/null;then
-    SCAN_CMD="netcat --tcp --wait=2 --zero ${HOST} ${PORT}"
-elif hash nc >/dev/null;then
-    SCAN_CMD="nc --tcp --wait=2 --zero ${HOST} ${PORT}"
-elif hash ncat >/dev/null;then
-    SCAN_CMD="ncat --send-only --wait 0.5 ${HOST} ${PORT}"
-    REQUIRE_NULL=1
-fi
 
+if [[ $IS_IPV6 -eq 1 ]];then
+    if hash socat >/dev/null;then
+        SCAN_CMD="socat -t0.5 -T0.5 - TCP:[${HOST}]:${PORT},connect-timeout=0.5"
+        REQUIRE_NULL=1
+    elif hash ncat >/dev/null;then
+        SCAN_CMD="ncat -6 --send-only --wait 0.5 ${HOST} ${PORT}"
+        REQUIRE_NULL=1
+    fi
+else
+    if hash socat >/dev/null;then
+        SCAN_CMD="socat -t0.5 -T0.5 - TCP:${HOST}:${PORT},connect-timeout=0.5"
+        REQUIRE_NULL=1
+    elif hash netcat >/dev/null;then
+        SCAN_CMD="netcat --tcp --wait=2 --zero ${HOST} ${PORT}"
+    elif hash nc >/dev/null;then
+        SCAN_CMD="nc --tcp --wait=2 --zero ${HOST} ${PORT}"
+    elif hash ncat >/dev/null;then
+        SCAN_CMD="ncat --send-only --wait 0.5 ${HOST} ${PORT}"
+        REQUIRE_NULL=1
+    fi
+fi
 
 if [[ $CHILD -gt 0 ]]; then
     wait_for
@@ -171,7 +199,7 @@ fi
 
 if [[ $CLI != "" ]]; then
     if [[ $RESULT -ne 0 && $STRICT -eq 1 ]]; then
-        echoerr "$cmdname: strict mode, refusing to execute subprocess"
+        echoerr "$SCRIPT_NAME: strict mode, refusing to execute subprocess"
         exit $RESULT
     fi
     exec $CLI
